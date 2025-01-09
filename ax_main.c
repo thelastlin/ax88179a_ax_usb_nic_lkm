@@ -21,6 +21,8 @@
 #include "ax_ptp.h"
 #endif
 
+#include <linux/acpi.h>
+
 #ifdef ENABLE_AUTODETACH_FUNC
 static int autodetach = -1;
 module_param(autodetach, int, 0);
@@ -2041,6 +2043,58 @@ static int ax_get_chip_feature(struct ax_device *axdev)
 	return 0;
 }
 
+/* lenovo specific, adopt from r8152.c 
+ * notice that user can read the aux MAC address from 
+ * `/sys/devices/platform/thinkpad_acpi/auxmac` if thinkpad_acpi is loaded
+ */
+static int vendor_mac_passthru_addr_get(struct ax_device *axdev, u8 *mac)
+{
+	acpi_status status;
+	struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
+	union acpi_object *obj;
+	int ret = -EINVAL;
+	unsigned char buf[6];
+	char *mac_obj_name;
+	acpi_object_type mac_obj_type;
+	int mac_strlen;
+
+	mac_obj_name = "\\MACA";
+	mac_obj_type = ACPI_TYPE_STRING;
+	mac_strlen = 0x16;
+
+	/* returns _AUXMAC_#AABBCCDDEEFF# */
+	status = acpi_evaluate_object(NULL, mac_obj_name, NULL, &buffer);
+	obj = (union acpi_object *)buffer.pointer;
+	if (!ACPI_SUCCESS(status))
+		return -ENODEV;
+	if (obj->type != mac_obj_type || obj->string.length != mac_strlen) {
+		netif_warn(axdev, probe, axdev->netdev,
+			   "Invalid buffer for pass-thru MAC addr: (%d, %d)\n",
+			   obj->type, obj->string.length);
+		goto amacout;
+	}
+
+	if (strncmp(obj->string.pointer, "_AUXMAC_#", 9) != 0 ||
+	    strncmp(obj->string.pointer + 0x15, "#", 1) != 0) {
+		netif_warn(axdev, probe, axdev->netdev,
+			   "Invalid header when reading pass-thru MAC addr\n");
+		goto amacout;
+	}
+	ret = hex2bin(buf, obj->string.pointer + 9, 6);
+	if (!(ret == 0 && is_valid_ether_addr(buf))) {
+		netif_warn(axdev, probe, axdev->netdev,
+			   "Invalid MAC for pass-thru MAC addr: %d, %pM\n",
+			   ret, buf);
+		ret = -EINVAL;
+		goto amacout;
+	}
+	memcpy(mac, buf, 6);
+
+amacout:
+	kfree(obj);
+	return ret;
+}
+
 static int ax_get_mac_address(struct ax_device *axdev)
 {
 	struct net_device *netdev = axdev->netdev;
@@ -2057,6 +2111,9 @@ static int ax_get_mac_address(struct ax_device *axdev)
 		dev_warn(&axdev->intf->dev, "Found invalid MAC address value");
 
 	macpassthru = (ax_get_mac_pass(axdev, addr.sa_data) == 0);
+	if (!macpassthru) {
+		macpassthru = (vendor_mac_passthru_addr_get(axdev, addr.sa_data) == 0);
+	}
 
 	if (macpassthru) {
 		axdev->netdev->addr_assign_type = NET_ADDR_STOLEN;
