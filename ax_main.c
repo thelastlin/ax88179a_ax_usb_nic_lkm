@@ -1953,7 +1953,7 @@ int ax_get_mac_pass(struct ax_device *axdev, u8 *mac)
 #endif
 	status = efi.get_variable(name, &guid, &attr, &data_size, &macpass);
 	if (status != EFI_SUCCESS) {
-		netdev_err(axdev->netdev, "Getting variable failed.(%ld)",
+		netdev_err(axdev->netdev, "Getting variable MacAddressPassTemp failed(%ld)",
 			   status);
 		return status;
 	}
@@ -2045,6 +2045,7 @@ static int ax_get_mac_address(struct ax_device *axdev)
 {
 	struct net_device *netdev = axdev->netdev;
 	struct sockaddr addr;
+	int macpassthru = 0;
 
 	if (ax_read_cmd(axdev, AX_ACCESS_MAC, AX_NODE_ID, ETH_ALEN,
 			ETH_ALEN, addr.sa_data, 0) < 0) {
@@ -2055,7 +2056,15 @@ static int ax_get_mac_address(struct ax_device *axdev)
 	if (ax_check_ether_addr(axdev, &addr))
 		dev_warn(&axdev->intf->dev, "Found invalid MAC address value");
 
-	ax_get_mac_pass(axdev, addr.sa_data);
+	macpassthru = (ax_get_mac_pass(axdev, addr.sa_data) == 0);
+
+	if (macpassthru) {
+		axdev->netdev->addr_assign_type = NET_ADDR_STOLEN;
+		netif_info(axdev, probe, axdev->netdev,
+		   "Using pass-thru MAC addr %pM\n", addr.sa_data);
+	} else {
+		dev_info(&axdev->intf->dev, "Mac Passthru unavailable");
+	}
 	
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 	eth_hw_addr_set(netdev, addr.sa_data);	
