@@ -18,6 +18,12 @@
 #include "ax88179a_772d.h"
 #ifdef ENABLE_PTP_FUNC
 #include "ax_ptp.h"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+#define ax_ethtool_ts_info kernel_ethtool_ts_info
+#else
+#define ax_ethtool_ts_info ethtool_ts_info
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0) */
 #endif
 
 struct _ax_buikin_setting AX88179A_BULKIN_SIZE[] = {
@@ -269,7 +275,7 @@ static int ax88179a_set_coalesce(struct net_device *netdev,
 
 #ifdef ENABLE_PTP_FUNC
 static int ax88179a_set_wol_get_ts_info
-(struct net_device *dev, struct ethtool_ts_info *info)
+(struct net_device *dev, struct ax_ethtool_ts_info *info)
 {
 	struct ax_device *axdev = (struct ax_device *)netdev_priv(dev);
 	struct ax_ptp_cfg *ptp_cfg = axdev->ptp_cfg;
