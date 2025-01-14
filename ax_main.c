@@ -1955,10 +1955,16 @@ int ax_get_mac_pass(struct ax_device *axdev, u8 *mac)
 #endif
 	status = efi.get_variable(name, &guid, &attr, &data_size, &macpass);
 	if (status != EFI_SUCCESS) {
+                int retval;
+#if KERNEL_VERSION(4, 8, 0) <= LINUX_VERSION_CODE
+                retval = efi_status_to_err(status);
+#else
+                retval = status;
+#endif
 		dev_info(&axdev->intf->dev,
-			 "Getting variable MacAddressPassTemp failed(%lx)",
+			 "Getting EFI variable MacAddressPassTemp failed(%lx)",
 			 status);
-		return status;
+		return retval;
 	}
 
 	if (macpass.control == MAC_PASS_ENABLE_0)
