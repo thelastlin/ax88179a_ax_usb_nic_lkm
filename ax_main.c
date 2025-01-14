@@ -1955,8 +1955,9 @@ int ax_get_mac_pass(struct ax_device *axdev, u8 *mac)
 #endif
 	status = efi.get_variable(name, &guid, &attr, &data_size, &macpass);
 	if (status != EFI_SUCCESS) {
-		netdev_err(axdev->netdev, "Getting variable MacAddressPassTemp failed(%ld)",
-			   status);
+		dev_info(&axdev->intf->dev,
+			 "Getting variable MacAddressPassTemp failed(%lx)",
+			 status);
 		return status;
 	}
 
@@ -2068,7 +2069,7 @@ static int vendor_mac_passthru_addr_get(struct ax_device *axdev, u8 *mac)
 	if (!ACPI_SUCCESS(status))
 		return -ENODEV;
 	if (obj->type != mac_obj_type || obj->string.length != mac_strlen) {
-		netif_warn(axdev, probe, axdev->netdev,
+		dev_warn(&axdev->intf->dev,
 			   "Invalid buffer for pass-thru MAC addr: (%d, %d)\n",
 			   obj->type, obj->string.length);
 		goto amacout;
@@ -2076,13 +2077,13 @@ static int vendor_mac_passthru_addr_get(struct ax_device *axdev, u8 *mac)
 
 	if (strncmp(obj->string.pointer, "_AUXMAC_#", 9) != 0 ||
 	    strncmp(obj->string.pointer + 0x15, "#", 1) != 0) {
-		netif_warn(axdev, probe, axdev->netdev,
-			   "Invalid header when reading pass-thru MAC addr\n");
+		dev_warn(&axdev->intf->dev,
+			 "Invalid header when reading pass-thru MAC addr\n");
 		goto amacout;
 	}
 	ret = hex2bin(buf, obj->string.pointer + 9, 6);
 	if (!(ret == 0 && is_valid_ether_addr(buf))) {
-		netif_warn(axdev, probe, axdev->netdev,
+		dev_warn(&axdev->intf->dev,
 			   "Invalid MAC for pass-thru MAC addr: %d, %pM\n",
 			   ret, buf);
 		ret = -EINVAL;
@@ -2117,8 +2118,8 @@ static int ax_get_mac_address(struct ax_device *axdev)
 
 	if (macpassthru) {
 		axdev->netdev->addr_assign_type = NET_ADDR_STOLEN;
-		netif_info(axdev, probe, axdev->netdev,
-		   "Using pass-thru MAC addr %pM\n", addr.sa_data);
+		dev_info(&axdev->intf->dev, "Using pass-thru MAC addr %pM\n",
+			 addr.sa_data);
 	} else {
 		dev_info(&axdev->intf->dev, "Mac Passthru unavailable");
 	}
